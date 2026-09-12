@@ -1,6 +1,7 @@
 import os
 import psycopg
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from werkzeug.security import generate_password_hash
 
 app = Flask(__name__)
