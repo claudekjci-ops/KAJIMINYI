@@ -1,160 +1,40 @@
 import os
+from datetime import datetime
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from werkzeug.security import generate_password_hash, check_password_hash
 
 import psycopg
-from psycopg.rows import dict_row
-
-from werkzeug.security import (
-    generate_password_hash,
-    check_password_hash
-)
-
-from openai import OpenAI
 
 
 # ============================================================
-# APPLICATION
+# KAJIMINYI - BACKEND
 # ============================================================
 
 app = Flask(__name__)
-
-CORS(
-    app,
-    resources={
-        r"/api/*": {
-            "origins": "*"
-        }
-    }
-)
-
-
-# ============================================================
-# CONFIGURATION
-# ============================================================
+CORS(app)
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-
-AI_MODEL = "gpt-5.6-luna"
-
 
 # ============================================================
-# CLIENT OPENAI
-# ============================================================
-
-client = None
-
-if OPENAI_API_KEY:
-    client = OpenAI(
-        api_key=OPENAI_API_KEY
-    )
-
-
-# ============================================================
-# DATABASE
+# CONNEXION DATABASE
 # ============================================================
 
 def get_db():
-
     if not DATABASE_URL:
-        raise RuntimeError(
-            "DATABASE_URL n'est pas configurée."
-        )
+        raise Exception("DATABASE_URL n'est pas configurée.")
 
-    return psycopg.connect(
-        DATABASE_URL,
-        row_factory=dict_row
-    )
-
-
-# ============================================================
-# CREATION DES TABLES
-# ============================================================
-
-def init_tables():
-
-    with get_db() as conn:
-
-        with conn.cursor() as cur:
-
-            # ------------------------------------------------
-            # USERS
-            # ------------------------------------------------
-
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id SERIAL PRIMARY KEY,
-                    full_name VARCHAR(150) NOT NULL,
-                    phone VARCHAR(30) UNIQUE NOT NULL,
-                    email VARCHAR(150) UNIQUE,
-                    password_hash VARCHAR(255) NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-
-            # ------------------------------------------------
-            # GROUPS
-            # ------------------------------------------------
-
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS groups (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(150) NOT NULL,
-                    description TEXT,
-                    photo_url TEXT,
-                    created_by INTEGER NOT NULL
-                        REFERENCES users(id)
-                        ON DELETE CASCADE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-
-            # ------------------------------------------------
-            # GROUP MEMBERS
-            # ------------------------------------------------
-
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS group_members (
-                    id SERIAL PRIMARY KEY,
-                    group_id INTEGER NOT NULL
-                        REFERENCES groups(id)
-                        ON DELETE CASCADE,
-                    user_id INTEGER NOT NULL
-                        REFERENCES users(id)
-                        ON DELETE CASCADE,
-                    role VARCHAR(20) DEFAULT 'member',
-                    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(group_id, user_id)
-                )
-            """)
-
-        conn.commit()
-
-
-# ============================================================
-# PAGE PRINCIPALE
-# ============================================================
-
-@app.route("/")
-def home():
-
-    return jsonify({
-        "success": True,
-        "message": "API KAJIMINYI fonctionne !",
-        "version": "1.0"
-    })
+    return psycopg.connect(DATABASE_URL)
 
 
 # ============================================================
 # TEST API
 # ============================================================
 
-@app.route("/api/test")
+@app.route("/api/test", methods=["GET"])
 def api_test():
-
     return jsonify({
         "success": True,
         "message": "API KAJIMINYI fonctionne !"
@@ -165,28 +45,22 @@ def api_test():
 # TEST DATABASE
 # ============================================================
 
-@app.route("/api/db-test")
+@app.route("/api/db-test", methods=["GET"])
 def db_test():
-
     try:
-
         with get_db() as conn:
-
             with conn.cursor() as cur:
-
-                cur.execute(
-                    "SELECT 1 AS result"
-                )
-
-                row = cur.fetchone()
+                cur.execute("SELECT 1")
+                result = cur.fetchone()[0]
 
         return jsonify({
             "success": True,
             "message": "Connexion à PostgreSQL réussie !",
-            "result": row["result"]
+            "result": result
         })
 
     except Exception as e:
+        print("ERREUR DATABASE:", e)
 
         return jsonify({
             "success": False,
@@ -195,22 +69,69 @@ def db_test():
 
 
 # ============================================================
-# INITIALISER DATABASE
+# INITIALISATION DES TABLES
 # ============================================================
 
-@app.route("/api/init-db")
+@app.route("/api/init-db", methods=["GET"])
 def init_db():
 
     try:
+        with get_db() as conn:
 
-        init_tables()
+            with conn.cursor() as cur:
+
+                # USERS
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id SERIAL PRIMARY KEY,
+                        full_name VARCHAR(150) NOT NULL,
+                        phone VARCHAR(30) UNIQUE NOT NULL,
+                        email VARCHAR(150) UNIQUE,
+                        password_hash VARCHAR(255) NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # GROUPS
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS groups (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR(150) NOT NULL,
+                        description TEXT,
+                        photo_url TEXT,
+                        created_by INTEGER NOT NULL
+                            REFERENCES users(id)
+                            ON DELETE CASCADE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # GROUP MEMBERS
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS group_members (
+                        id SERIAL PRIMARY KEY,
+                        group_id INTEGER NOT NULL
+                            REFERENCES groups(id)
+                            ON DELETE CASCADE,
+                        user_id INTEGER NOT NULL
+                            REFERENCES users(id)
+                            ON DELETE CASCADE,
+                        role VARCHAR(20) DEFAULT 'member',
+                        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(group_id, user_id)
+                    )
+                """)
+
+                conn.commit()
 
         return jsonify({
             "success": True,
-            "message": "Tables KAJIMINYI créées avec succès."
+            "message": "Base de données KAJIMINYI initialisée."
         })
 
     except Exception as e:
+
+        print("ERREUR INIT DB:", e)
 
         return jsonify({
             "success": False,
@@ -222,60 +143,73 @@ def init_db():
 # INSCRIPTION
 # ============================================================
 
-@app.route(
-    "/api/register",
-    methods=["POST"]
-)
+@app.route("/api/register", methods=["POST"])
 def register():
 
     try:
 
         data = request.get_json() or {}
 
-        full_name = (
-            data.get("full_name") or ""
-        ).strip()
-
-        phone = (
-            data.get("phone") or ""
-        ).strip()
-
-        email = (
-            data.get("email") or ""
-        ).strip()
-
-        password = (
-            data.get("password") or ""
-        )
+        full_name = str(data.get("full_name", "")).strip()
+        phone = str(data.get("phone", "")).strip()
+        email = str(data.get("email", "")).strip()
+        password = str(data.get("password", ""))
 
         if not full_name:
-
             return jsonify({
                 "success": False,
                 "message": "Le nom complet est obligatoire."
             }), 400
 
         if not phone:
-
             return jsonify({
                 "success": False,
                 "message": "Le numéro de téléphone est obligatoire."
             }), 400
 
         if not password:
-
             return jsonify({
                 "success": False,
                 "message": "Le mot de passe est obligatoire."
             }), 400
 
-        password_hash = generate_password_hash(
-            password
-        )
+        if len(password) < 6:
+            return jsonify({
+                "success": False,
+                "message": "Le mot de passe doit contenir au moins 6 caractères."
+            }), 400
+
+        password_hash = generate_password_hash(password)
 
         with get_db() as conn:
 
             with conn.cursor() as cur:
+
+                cur.execute("""
+                    SELECT id
+                    FROM users
+                    WHERE phone = %s
+                """, (phone,))
+
+                if cur.fetchone():
+                    return jsonify({
+                        "success": False,
+                        "message": "Ce numéro de téléphone est déjà utilisé."
+                    }), 409
+
+                if email:
+
+                    cur.execute("""
+                        SELECT id
+                        FROM users
+                        WHERE email = %s
+                    """, (email,))
+
+                    if cur.fetchone():
+                        return jsonify({
+                            "success": False,
+                            "message": "Cette adresse email est déjà utilisée."
+                        }), 409
 
                 cur.execute("""
                     INSERT INTO users
@@ -286,41 +220,36 @@ def register():
                         password_hash
                     )
                     VALUES (%s, %s, %s, %s)
-                    RETURNING
-                        id,
-                        full_name,
-                        phone,
-                        email,
-                        created_at
+                    RETURNING id
                 """, (
                     full_name,
                     phone,
-                    email or None,
+                    email if email else None,
                     password_hash
                 ))
 
-                user = cur.fetchone()
+                user_id = cur.fetchone()[0]
 
-            conn.commit()
+                conn.commit()
 
         return jsonify({
             "success": True,
-            "message": "Compte créé avec succès.",
-            "user": user
+            "message": "Compte KAJIMINYI créé avec succès.",
+            "user": {
+                "id": user_id,
+                "full_name": full_name,
+                "phone": phone,
+                "email": email
+            }
         }), 201
-
-    except psycopg.errors.UniqueViolation:
-
-        return jsonify({
-            "success": False,
-            "message": "Ce numéro ou cet email existe déjà."
-        }), 409
 
     except Exception as e:
 
+        print("ERREUR REGISTER:", e)
+
         return jsonify({
             "success": False,
-            "message": str(e)
+            "message": "Erreur lors de la création du compte."
         }), 500
 
 
@@ -328,29 +257,21 @@ def register():
 # CONNEXION
 # ============================================================
 
-@app.route(
-    "/api/login",
-    methods=["POST"]
-)
+@app.route("/api/login", methods=["POST"])
 def login():
 
     try:
 
         data = request.get_json() or {}
 
-        phone = (
-            data.get("phone") or ""
-        ).strip()
-
-        password = (
-            data.get("password") or ""
-        )
+        phone = str(data.get("phone", "")).strip()
+        password = str(data.get("password", ""))
 
         if not phone or not password:
 
             return jsonify({
                 "success": False,
-                "message": "Téléphone et mot de passe obligatoires."
+                "message": "Numéro de téléphone et mot de passe obligatoires."
             }), 400
 
         with get_db() as conn:
@@ -375,35 +296,36 @@ def login():
 
             return jsonify({
                 "success": False,
-                "message": "Numéro ou mot de passe incorrect."
+                "message": "Numéro de téléphone ou mot de passe incorrect."
             }), 401
 
-        if not check_password_hash(
-            user["password_hash"],
-            password
-        ):
+        if not check_password_hash(user[4], password):
 
             return jsonify({
                 "success": False,
-                "message": "Numéro ou mot de passe incorrect."
+                "message": "Numéro de téléphone ou mot de passe incorrect."
             }), 401
-
-        user.pop(
-            "password_hash",
-            None
-        )
 
         return jsonify({
             "success": True,
             "message": "Connexion réussie.",
-            "user": user
+            "user": {
+                "id": user[0],
+                "full_name": user[1],
+                "phone": user[2],
+                "email": user[3],
+                "created_at": user[5].isoformat()
+                if user[5] else None
+            }
         })
 
     except Exception as e:
 
+        print("ERREUR LOGIN:", e)
+
         return jsonify({
             "success": False,
-            "message": str(e)
+            "message": "Erreur lors de la connexion."
         }), 500
 
 
@@ -411,8 +333,8 @@ def login():
 # LISTE DES UTILISATEURS
 # ============================================================
 
-@app.route("/api/users")
-def users():
+@app.route("/api/users", methods=["GET"])
+def get_users():
 
     try:
 
@@ -428,57 +350,55 @@ def users():
                         email,
                         created_at
                     FROM users
-                    ORDER BY created_at DESC
+                    ORDER BY full_name ASC
                 """)
 
-                users_list = cur.fetchall()
+                rows = cur.fetchall()
+
+        users = []
+
+        for row in rows:
+
+            users.append({
+                "id": row[0],
+                "full_name": row[1],
+                "phone": row[2],
+                "email": row[3],
+                "created_at": row[4]
+            })
 
         return jsonify({
             "success": True,
-            "users": users_list
+            "users": users
         })
 
     except Exception as e:
 
+        print("ERREUR USERS:", e)
+
         return jsonify({
             "success": False,
-            "message": str(e)
+            "message": "Impossible de récupérer les utilisateurs."
         }), 500
 
 
 # ============================================================
-# CREER UN GROUPE
+# CREATION D'UN GROUPE
 # ============================================================
 
-@app.route(
-    "/api/groups",
-    methods=["POST"]
-)
+@app.route("/api/groups", methods=["POST"])
 def create_group():
 
     try:
 
         data = request.get_json() or {}
 
-        name = (
-            data.get("name") or ""
-        ).strip()
+        name = str(data.get("name", "")).strip()
+        description = str(data.get("description", "")).strip()
+        photo_url = str(data.get("photo_url", "")).strip()
 
-        description = (
-            data.get("description") or ""
-        ).strip()
-
-        photo_url = (
-            data.get("photo_url") or ""
-        ).strip()
-
-        creator_id = data.get(
-            "creator_id"
-        )
-
-        member_ids = data.get(
-            "member_ids"
-        ) or []
+        creator_id = data.get("creator_id")
+        member_ids = data.get("member_ids", [])
 
         if not name:
 
@@ -491,25 +411,22 @@ def create_group():
 
             return jsonify({
                 "success": False,
-                "message": "Le créateur du groupe est obligatoire."
+                "message": "Créateur du groupe manquant."
             }), 400
 
         try:
-
             creator_id = int(creator_id)
-
-        except:
+        except Exception:
 
             return jsonify({
                 "success": False,
-                "message": "creator_id invalide."
+                "message": "Identifiant du créateur invalide."
             }), 400
 
-        # ----------------------------------------------------
-        # Nettoyage des IDs
-        # ----------------------------------------------------
+        if not isinstance(member_ids, list):
+            member_ids = []
 
-        clean_members = []
+        cleaned_members = []
 
         for member_id in member_ids:
 
@@ -517,47 +434,35 @@ def create_group():
 
                 member_id = int(member_id)
 
-                if member_id not in clean_members:
+                if member_id not in cleaned_members:
+                    cleaned_members.append(member_id)
 
-                    clean_members.append(
-                        member_id
-                    )
-
-            except:
-
+            except Exception:
                 pass
 
         # Le créateur doit toujours être membre
-
-        if creator_id not in clean_members:
-
-            clean_members.append(
-                creator_id
-            )
+        if creator_id not in cleaned_members:
+            cleaned_members.append(creator_id)
 
         with get_db() as conn:
 
             with conn.cursor() as cur:
 
                 # Vérifier créateur
-
                 cur.execute("""
                     SELECT id
                     FROM users
                     WHERE id = %s
                 """, (creator_id,))
 
-                creator = cur.fetchone()
-
-                if not creator:
+                if not cur.fetchone():
 
                     return jsonify({
                         "success": False,
-                        "message": "Utilisateur créateur introuvable."
+                        "message": "Créateur introuvable."
                     }), 404
 
                 # Créer groupe
-
                 cur.execute("""
                     INSERT INTO groups
                     (
@@ -567,87 +472,102 @@ def create_group():
                         created_by
                     )
                     VALUES (%s, %s, %s, %s)
-                    RETURNING
-                        id,
-                        name,
-                        description,
-                        photo_url,
-                        created_by,
-                        created_at
+                    RETURNING id
                 """, (
                     name,
-                    description or None,
-                    photo_url or None,
+                    description,
+                    photo_url,
                     creator_id
                 ))
 
-                group = cur.fetchone()
+                group_id = cur.fetchone()[0]
 
                 # Ajouter membres
-
-                for member_id in clean_members:
-
-                    role = (
-                        "admin"
-                        if member_id == creator_id
-                        else "member"
-                    )
+                for member_id in cleaned_members:
 
                     cur.execute("""
-                        INSERT INTO group_members
-                        (
-                            group_id,
-                            user_id,
-                            role
-                        )
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT
-                        (
-                            group_id,
-                            user_id
-                        )
-                        DO NOTHING
-                    """, (
-                        group["id"],
-                        member_id,
-                        role
-                    ))
+                        SELECT id
+                        FROM users
+                        WHERE id = %s
+                    """, (member_id,))
 
-            conn.commit()
+                    if cur.fetchone():
+
+                        role = (
+                            "admin"
+                            if member_id == creator_id
+                            else "member"
+                        )
+
+                        cur.execute("""
+                            INSERT INTO group_members
+                            (
+                                group_id,
+                                user_id,
+                                role
+                            )
+                            VALUES (%s, %s, %s)
+                            ON CONFLICT
+                            (
+                                group_id,
+                                user_id
+                            )
+                            DO NOTHING
+                        """, (
+                            group_id,
+                            member_id,
+                            role
+                        ))
+
+                conn.commit()
 
         return jsonify({
             "success": True,
             "message": "Groupe créé avec succès.",
-            "group": group
+            "group": {
+                "id": group_id,
+                "name": name,
+                "description": description,
+                "photo_url": photo_url,
+                "created_by": creator_id
+            }
         }), 201
 
     except Exception as e:
 
+        print("ERREUR CREATE GROUP:", e)
+
         return jsonify({
             "success": False,
-            "message": str(e)
+            "message": "Impossible de créer le groupe."
         }), 500
 
 
 # ============================================================
-# LISTE DES GROUPES D'UN UTILISATEUR
+# RECUPERER LES GROUPES D'UN UTILISATEUR
 # ============================================================
 
-@app.route("/api/groups")
+@app.route("/api/groups", methods=["GET"])
 def get_groups():
 
     try:
 
-        user_id = request.args.get(
-            "user_id",
-            type=int
-        )
+        user_id = request.args.get("user_id")
 
         if not user_id:
 
             return jsonify({
                 "success": False,
                 "message": "user_id est obligatoire."
+            }), 400
+
+        try:
+            user_id = int(user_id)
+        except Exception:
+
+            return jsonify({
+                "success": False,
+                "message": "user_id invalide."
             }), 400
 
         with get_db() as conn:
@@ -669,7 +589,20 @@ def get_groups():
                     ORDER BY g.created_at DESC
                 """, (user_id,))
 
-                groups = cur.fetchall()
+                rows = cur.fetchall()
+
+        groups = []
+
+        for row in rows:
+
+            groups.append({
+                "id": row[0],
+                "name": row[1],
+                "description": row[2],
+                "photo_url": row[3],
+                "created_by": row[4],
+                "created_at": row[5]
+            })
 
         return jsonify({
             "success": True,
@@ -678,410 +611,272 @@ def get_groups():
 
     except Exception as e:
 
+        print("ERREUR GET GROUPS:", e)
+
         return jsonify({
             "success": False,
-            "message": str(e)
+            "message": "Impossible de récupérer les groupes."
         }), 500
 
 
 # ============================================================
-# MEMBRES D'UN GROUPE
+# ASSISTANT KAJIMINYI - MODE GRATUIT
 # ============================================================
 
-@app.route(
-    "/api/groups/<int:group_id>/members"
-)
-def get_group_members(group_id):
-
-    try:
-
-        with get_db() as conn:
-
-            with conn.cursor() as cur:
-
-                cur.execute("""
-                    SELECT
-                        u.id,
-                        u.full_name,
-                        u.phone,
-                        u.email,
-                        gm.role,
-                        gm.joined_at
-                    FROM group_members gm
-                    INNER JOIN users u
-                        ON u.id = gm.user_id
-                    WHERE gm.group_id = %s
-                    ORDER BY gm.joined_at ASC
-                """, (group_id,))
-
-                members = cur.fetchall()
-
-        return jsonify({
-            "success": True,
-            "members": members
-        })
-
-    except Exception as e:
-
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+AI_NAME = "Assistant KAJIMINYI"
 
 
-# ============================================================
-# AJOUTER UN MEMBRE
-# ============================================================
+def assistant_local(message):
 
-@app.route(
-    "/api/groups/<int:group_id>/members",
-    methods=["POST"]
-)
-def add_group_member(group_id):
+    """
+    Assistant local gratuit.
 
-    try:
+    Il ne contacte aucune API externe.
+    Il ne nécessite donc aucun crédit OpenAI.
+    """
 
-        data = request.get_json() or {}
+    text = message.lower().strip()
 
-        user_id = data.get(
-            "user_id"
+    # Salutations
+    if any(word in text for word in [
+        "bonjour",
+        "salut",
+        "hello",
+        "bonsoir",
+        "coucou"
+    ]):
+
+        return (
+            "Bonjour 👋 Je suis l'Assistant KAJIMINYI. "
+            "Je suis là pour t'aider à utiliser ton application "
+            "et pour répondre à tes questions."
         )
 
-        role = data.get(
-            "role",
-            "member"
+    # Identité
+    if (
+        "qui es-tu" in text
+        or "qui est tu" in text
+        or "tu es qui" in text
+    ):
+
+        return (
+            "Je suis l'Assistant KAJIMINYI 🤖. "
+            "Je suis l'assistant intégré à l'application KAJIMINYI. "
+            "Cette version fonctionne actuellement en mode gratuit "
+            "directement depuis le serveur."
         )
 
-        if not user_id:
+    # KAJIMINYI
+    if "kajiminyi" in text:
 
-            return jsonify({
-                "success": False,
-                "message": "user_id est obligatoire."
-            }), 400
+        return (
+            "KAJIMINYI 📱 est une application de messagerie "
+            "conçue pour permettre aux utilisateurs de discuter, "
+            "créer des groupes, échanger des messages et utiliser "
+            "des fonctionnalités intelligentes."
+        )
 
-        try:
+    # Aide
+    if (
+        "aide" in text
+        or "help" in text
+        or "comment utiliser" in text
+    ):
 
-            user_id = int(user_id)
+        return (
+            "Je peux t'aider avec KAJIMINYI. 😊\n\n"
+            "Tu peux notamment utiliser :\n"
+            "• les conversations 💬\n"
+            "• les groupes 👥\n"
+            "• les appels 📞\n"
+            "• l'assistant IA 🤖\n"
+            "• ton profil 👤"
+        )
 
-        except:
+    # Merci
+    if (
+        "merci" in text
+        or "thanks" in text
+    ):
 
-            return jsonify({
-                "success": False,
-                "message": "user_id invalide."
-            }), 400
+        return (
+            "Avec plaisir ! 😊 "
+            "Je suis là pour t'aider."
+        )
 
-        with get_db() as conn:
+    # Qui a créé
+    if (
+        "créateur" in text
+        or "createur" in text
+        or "développeur" in text
+        or "developpeur" in text
+    ):
 
-            with conn.cursor() as cur:
+        return (
+            "KAJIMINYI est le projet que nous sommes en train "
+            "de construire ensemble. 🚀"
+        )
 
-                cur.execute("""
-                    INSERT INTO group_members
-                    (
-                        group_id,
-                        user_id,
-                        role
-                    )
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT
-                    (
-                        group_id,
-                        user_id
-                    )
-                    DO NOTHING
-                    RETURNING
-                        id,
-                        group_id,
-                        user_id,
-                        role,
-                        joined_at
-                """, (
-                    group_id,
-                    user_id,
-                    role
-                ))
+    # Fonctionnalités
+    if (
+        "fonctionnalité" in text
+        or "fonctionnalites" in text
+        or "fonction" in text
+    ):
 
-                member = cur.fetchone()
+        return (
+            "KAJIMINYI est conçu autour de plusieurs fonctionnalités :\n\n"
+            "💬 Messages\n"
+            "👥 Groupes\n"
+            "📞 Appels audio\n"
+            "📹 Appels vidéo\n"
+            "🤖 Assistant\n"
+            "👤 Profils\n"
+            "🔔 Notifications\n\n"
+            "Nous pouvons les développer progressivement."
+        )
 
-            conn.commit()
+    # Traduction simple
+    if "traduis" in text or "traduire" in text:
 
-        return jsonify({
-            "success": True,
-            "message": "Membre ajouté.",
-            "member": member
-        })
+        return (
+            "Je peux préparer une traduction simple. 🌍 "
+            "Écris-moi le texte à traduire et précise la langue souhaitée."
+        )
 
-    except Exception as e:
+    # Rédaction
+    if (
+        "écris" in text
+        or "ecris" in text
+        or "rédige" in text
+        or "redige" in text
+    ):
 
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return (
+            "Bien sûr ✍️. "
+            "Donne-moi le type de texte que tu souhaites préparer "
+            "et son objectif."
+        )
 
+    # Idée
+    if "idée" in text or "idee" in text:
 
-# ============================================================
-# SUPPRIMER UN GROUPE
-# ============================================================
+        return (
+            "Voici une idée 💡 : ajoute progressivement à KAJIMINYI "
+            "des fonctionnalités qui facilitent la communication, "
+            "comme les messages vocaux, les réactions, les groupes "
+            "et les appels."
+        )
 
-@app.route(
-    "/api/groups/<int:group_id>",
-    methods=["DELETE"]
-)
-def delete_group(group_id):
+    # Explication
+    if (
+        "explique" in text
+        or "expliquer" in text
+    ):
 
-    try:
+        return (
+            "Bien sûr 🧠. "
+            "Donne-moi le sujet que tu veux comprendre et je "
+            "te l'expliquerai simplement."
+        )
 
-        with get_db() as conn:
-
-            with conn.cursor() as cur:
-
-                cur.execute("""
-                    DELETE FROM groups
-                    WHERE id = %s
-                    RETURNING id
-                """, (group_id,))
-
-                deleted = cur.fetchone()
-
-            conn.commit()
-
-        if not deleted:
-
-            return jsonify({
-                "success": False,
-                "message": "Groupe introuvable."
-            }), 404
-
-        return jsonify({
-            "success": True,
-    "message": "Groupe supprimé."
-        })
-
-    except Exception as e:
-
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
-
-
-# ============================================================
-# ASSISTANT IA
-# ============================================================
-
-AI_INSTRUCTION = """
-Tu es l'Assistant IA officiel intégré à l'application KAJIMINYI.
-
-Ton nom est Assistant KAJIMINYI.
-
-Tu réponds principalement en français, sauf si
-l'utilisateur demande une autre langue.
-
-Tu es chaleureux, professionnel, clair et utile.
-
-Tu peux notamment aider avec :
-
-- rédaction de messages
-- correction de textes
-- traduction
-- explications
-- idées
-- études
-- programmation
-- développement de KAJIMINYI
-- création de contenu
-- organisation
-- questions générales
-
-Lorsque l'utilisateur demande du code,
-donne du code propre et explique brièvement
-comment l'utiliser.
-
-Ne prétends jamais avoir effectué une action
-que tu n'as pas réellement effectuée.
-
-Si une information n'est pas connue,
-dis-le clairement.
-
-KAJIMINYI est une application de messagerie
-développée par l'utilisateur.
-
-L'objectif est de construire progressivement
-une application moderne avec messagerie,
-groupes, appels, IA et autres fonctionnalités.
-"""
+    # Réponse générale
+    return (
+        "Je comprends ta question. 😊\n\n"
+        "Je fonctionne actuellement en mode gratuit local, "
+        "sans API OpenAI. Je peux surtout t'aider avec "
+        "l'utilisation et le développement de KAJIMINYI.\n\n"
+        "Essaie par exemple :\n"
+        "• « Qui es-tu ? »\n"
+        "• « Qu'est-ce que KAJIMINYI ? »\n"
+        "• « Donne-moi de l'aide »\n"
+        "• « Quelles sont les fonctionnalités ? »"
+    )
 
 
 # ============================================================
-# CHAT IA
+# API ASSISTANT
 # ============================================================
 
-@app.route(
-    "/api/ai/chat",
-    methods=["POST"]
-)
+@app.route("/api/ai/chat", methods=["POST"])
 def ai_chat():
 
     try:
 
-        # ----------------------------------------------------
-        # Vérifier la clé OpenAI
-        # ----------------------------------------------------
-
-        if not OPENAI_API_KEY or client is None:
-
-            return jsonify({
-                "success": False,
-                "message": (
-                    "OPENAI_API_KEY n'est pas configurée "
-                    "sur le serveur."
-                )
-            }), 500
-
-        # ----------------------------------------------------
-        # Récupérer les données
-        # ----------------------------------------------------
-
         data = request.get_json() or {}
 
-        message = (
-            data.get("message") or ""
+        message = str(
+            data.get("message", "")
         ).strip()
-
-        history = (
-            data.get("history") or []
-        )
 
         if not message:
 
             return jsonify({
                 "success": False,
-                "message": "Le message est vide."
+                "message": "Message vide."
             }), 400
 
-        # ----------------------------------------------------
-        # Limite du message
-        # ----------------------------------------------------
-
-        if len(message) > 12000:
+        if len(message) > 5000:
 
             return jsonify({
                 "success": False,
                 "message": "Message trop long."
             }), 400
 
-        # ----------------------------------------------------
-        # Construire l'historique
-        # ----------------------------------------------------
+        # Historique reçu par le frontend.
+        # Il est accepté pour conserver la compatibilité
+        # avec assistant.html.
+        history = data.get("history", [])
 
-        input_messages = []
+        if not isinstance(history, list):
+            history = []
 
-        history = history[-12:]
-
-        for item in history:
-
-            if not isinstance(item, dict):
-                continue
-
-            role = item.get("role")
-
-            content = item.get("content")
-
-            if role not in [
-                "user",
-                "assistant"
-            ]:
-                continue
-
-            if not content:
-                continue
-
-            input_messages.append({
-                "role": role,
-                "content": str(content)[:12000]
-            })
-
-        # ----------------------------------------------------
-        # Nouveau message
-        # ----------------------------------------------------
-
-        input_messages.append({
-            "role": "user",
-            "content": message
-        })
-
-        # ----------------------------------------------------
-        # APPEL OPENAI
-        # ----------------------------------------------------
-
-        response = client.responses.create(
-            model=AI_MODEL,
-            instructions=AI_INSTRUCTION,
-            input=input_messages,
-            max_output_tokens=1200
-        )
-
-        reply = response.output_text
-
-        if not reply:
-
-            reply = (
-                "Je n'ai pas pu générer une réponse."
-            )
-
-        # ----------------------------------------------------
-        # REPONSE
-        # ----------------------------------------------------
+        # Réponse locale gratuite
+        reply = assistant_local(message)
 
         return jsonify({
             "success": True,
             "reply": reply,
-            "model": AI_MODEL
+            "model": "kajiminyi-local-free",
+            "history_received": len(history)
         })
 
     except Exception as e:
 
-        print(
-            "ERREUR ASSISTANT IA:",
-            str(e)
-        )
+        print("ERREUR ASSISTANT LOCAL:", e)
 
         return jsonify({
             "success": False,
-            "message": (
-                "Une erreur est survenue avec "
-                "l'Assistant IA."
-            )
+            "message": "Erreur de l'assistant KAJIMINYI."
         }), 500
 
 
 # ============================================================
-# INITIALISATION
+# PAGE RACINE
 # ============================================================
 
-try:
+@app.route("/", methods=["GET"])
+def home():
 
-    init_tables()
-
-except Exception as e:
-
-    print(
-        "Initialisation DB:",
-        str(e)
-    )
+    return jsonify({
+        "success": True,
+        "application": "KAJIMINYI",
+        "message": "Backend KAJIMINYI opérationnel.",
+        "ai": "Mode local gratuit"
+    })
 
 
 # ============================================================
-# DEMARRAGE LOCAL
+# DEMARRAGE
 # ============================================================
 
 if __name__ == "__main__":
 
+    port = int(
+        os.environ.get("PORT", 5000)
+    )
+
     app.run(
         host="0.0.0.0",
-        port=int(
-            os.environ.get(
-                "PORT",
-                5000
-            )
-        )
-)
+        port=port
+    ))
