@@ -1,11 +1,17 @@
 import os
 import psycopg
+
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash
-CORS(app)
+
+
 app = Flask(__name__)
 
+# Autoriser les pages HTML à communiquer avec l'API
+CORS(app)
+
+# Adresse de la base PostgreSQL configurée dans Render
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
@@ -29,6 +35,7 @@ def test():
 @app.route("/api/db-test")
 def db_test():
     try:
+
         if not DATABASE_URL:
             return jsonify({
                 "success": False,
@@ -36,6 +43,7 @@ def db_test():
             }), 500
 
         with psycopg.connect(DATABASE_URL) as conn:
+
             with conn.cursor() as cursor:
                 cursor.execute("SELECT 1")
                 result = cursor.fetchone()
@@ -47,6 +55,7 @@ def db_test():
         })
 
     except Exception as e:
+
         return jsonify({
             "success": False,
             "message": "Erreur de connexion à PostgreSQL",
@@ -57,6 +66,7 @@ def db_test():
 @app.route("/api/init-db")
 def init_db():
     try:
+
         if not DATABASE_URL:
             return jsonify({
                 "success": False,
@@ -64,6 +74,7 @@ def init_db():
             }), 500
 
         with psycopg.connect(DATABASE_URL) as conn:
+
             with conn.cursor() as cursor:
 
                 cursor.execute("""
@@ -85,39 +96,99 @@ def init_db():
         })
 
     except Exception as e:
+
         return jsonify({
             "success": False,
             "message": "Erreur lors de la création de la table users",
             "error": str(e)
         }), 500
 
+
 @app.route("/api/register", methods=["POST"])
 def register():
+
     try:
+
         data = request.get_json()
+
+        if not data:
+            return jsonify({
+                "success": False,
+                "message": "Aucune donnée reçue"
+            }), 400
 
         full_name = data.get("full_name")
         phone = data.get("phone")
         email = data.get("email")
         password = data.get("password")
 
+        # Vérification des champs obligatoires
         if not full_name or not phone or not password:
+
             return jsonify({
                 "success": False,
                 "message": "Nom, téléphone et mot de passe sont obligatoires"
             }), 400
 
+        # Vérification de la connexion PostgreSQL
+        if not DATABASE_URL:
+
+            return jsonify({
+                "success": False,
+                "message": "DATABASE_URL n'est pas configurée"
+            }), 500
+
+        # Création sécurisée du mot de passe
         password_hash = generate_password_hash(password)
 
         with psycopg.connect(DATABASE_URL) as conn:
+
             with conn.cursor() as cursor:
 
+                # Vérifier si le numéro existe déjà
+                cursor.execute(
+                    "SELECT id FROM users WHERE phone = %s",
+                    (phone,)
+                )
+
+                existing_phone = cursor.fetchone()
+
+                if existing_phone:
+
+                    return jsonify({
+                        "success": False,
+                        "message": "Ce numéro de téléphone est déjà utilisé"
+                    }), 409
+
+                # Vérifier si l'email existe déjà
+                if email:
+
+                    cursor.execute(
+                        "SELECT id FROM users WHERE email = %s",
+                        (email,)
+                    )
+
+                    existing_email = cursor.fetchone()
+
+                    if existing_email:
+
+                        return jsonify({
+                            "success": False,
+                            "message": "Cette adresse email est déjà utilisée"
+                        }), 409
+
+                # Créer le compte
                 cursor.execute("""
                     INSERT INTO users
                     (full_name, phone, email, password_hash)
                     VALUES (%s, %s, %s, %s)
                     RETURNING id
-                """, (full_name, phone, email, password_hash))
+                """, (
+                    full_name,
+                    phone,
+                    email,
+                    password_hash
+                ))
 
                 user_id = cursor.fetchone()[0]
 
@@ -130,10 +201,17 @@ def register():
         }), 201
 
     except Exception as e:
+
         return jsonify({
             "success": False,
             "message": "Impossible de créer le compte",
             "error": str(e)
         }), 500
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+
+    app.run(
+        host="0.0.0.0",
+        port=10000
+    )
