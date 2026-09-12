@@ -1,16 +1,10 @@
 import os
-from datetime import datetime
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
-
 import psycopg
 
-
-# ============================================================
-# KAJIMINYI - BACKEND
-# ============================================================
 
 app = Flask(__name__)
 CORS(app)
@@ -19,7 +13,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
 # ============================================================
-# CONNEXION DATABASE
+# DATABASE
 # ============================================================
 
 def get_db():
@@ -47,6 +41,7 @@ def api_test():
 
 @app.route("/api/db-test", methods=["GET"])
 def db_test():
+
     try:
         with get_db() as conn:
             with conn.cursor() as cur:
@@ -60,6 +55,7 @@ def db_test():
         })
 
     except Exception as e:
+
         print("ERREUR DATABASE:", e)
 
         return jsonify({
@@ -69,18 +65,18 @@ def db_test():
 
 
 # ============================================================
-# INITIALISATION DES TABLES
+# INITIALISATION DATABASE
 # ============================================================
 
 @app.route("/api/init-db", methods=["GET"])
 def init_db():
 
     try:
+
         with get_db() as conn:
 
             with conn.cursor() as cur:
 
-                # USERS
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS users (
                         id SERIAL PRIMARY KEY,
@@ -92,7 +88,6 @@ def init_db():
                     )
                 """)
 
-                # GROUPS
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS groups (
                         id SERIAL PRIMARY KEY,
@@ -106,7 +101,6 @@ def init_db():
                     )
                 """)
 
-                # GROUP MEMBERS
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS group_members (
                         id SERIAL PRIMARY KEY,
@@ -192,6 +186,7 @@ def register():
                 """, (phone,))
 
                 if cur.fetchone():
+
                     return jsonify({
                         "success": False,
                         "message": "Ce numéro de téléphone est déjà utilisé."
@@ -206,6 +201,7 @@ def register():
                     """, (email,))
 
                     if cur.fetchone():
+
                         return jsonify({
                             "success": False,
                             "message": "Cette adresse email est déjà utilisée."
@@ -314,8 +310,11 @@ def login():
                 "full_name": user[1],
                 "phone": user[2],
                 "email": user[3],
-                "created_at": user[5].isoformat()
-                if user[5] else None
+                "created_at": (
+                    user[5].isoformat()
+                    if user[5]
+                    else None
+                )
             }
         })
 
@@ -330,7 +329,7 @@ def login():
 
 
 # ============================================================
-# LISTE DES UTILISATEURS
+# UTILISATEURS
 # ============================================================
 
 @app.route("/api/users", methods=["GET"])
@@ -383,7 +382,7 @@ def get_users():
 
 
 # ============================================================
-# CREATION D'UN GROUPE
+# CREER UN GROUPE
 # ============================================================
 
 @app.route("/api/groups", methods=["POST"])
@@ -440,7 +439,6 @@ def create_group():
             except Exception:
                 pass
 
-        # Le créateur doit toujours être membre
         if creator_id not in cleaned_members:
             cleaned_members.append(creator_id)
 
@@ -448,7 +446,6 @@ def create_group():
 
             with conn.cursor() as cur:
 
-                # Vérifier créateur
                 cur.execute("""
                     SELECT id
                     FROM users
@@ -462,7 +459,6 @@ def create_group():
                         "message": "Créateur introuvable."
                     }), 404
 
-                # Créer groupe
                 cur.execute("""
                     INSERT INTO groups
                     (
@@ -482,7 +478,6 @@ def create_group():
 
                 group_id = cur.fetchone()[0]
 
-                # Ajouter membres
                 for member_id in cleaned_members:
 
                     cur.execute("""
@@ -544,7 +539,7 @@ def create_group():
 
 
 # ============================================================
-# RECUPERER LES GROUPES D'UN UTILISATEUR
+# GROUPES
 # ============================================================
 
 @app.route("/api/groups", methods=["GET"])
@@ -623,21 +618,10 @@ def get_groups():
 # ASSISTANT KAJIMINYI - MODE GRATUIT
 # ============================================================
 
-AI_NAME = "Assistant KAJIMINYI"
-
-
 def assistant_local(message):
-
-    """
-    Assistant local gratuit.
-
-    Il ne contacte aucune API externe.
-    Il ne nécessite donc aucun crédit OpenAI.
-    """
 
     text = message.lower().strip()
 
-    # Salutations
     if any(word in text for word in [
         "bonjour",
         "salut",
@@ -647,12 +631,11 @@ def assistant_local(message):
     ]):
 
         return (
-            "Bonjour 👋 Je suis l'Assistant KAJIMINYI. "
-            "Je suis là pour t'aider à utiliser ton application "
-            "et pour répondre à tes questions."
+            "Bonjour 👋 Je suis l'Assistant KAJIMINYI 🤖.\n\n"
+            "Je suis là pour t'aider avec ton application "
+            "et répondre à tes questions."
         )
 
-    # Identité
     if (
         "qui es-tu" in text
         or "qui est tu" in text
@@ -660,23 +643,26 @@ def assistant_local(message):
     ):
 
         return (
-            "Je suis l'Assistant KAJIMINYI 🤖. "
-            "Je suis l'assistant intégré à l'application KAJIMINYI. "
-            "Cette version fonctionne actuellement en mode gratuit "
-            "directement depuis le serveur."
+            "Je suis l'Assistant KAJIMINYI 🤖.\n\n"
+            "Je suis l'assistant intégré à l'application "
+            "KAJIMINYI. Cette version fonctionne gratuitement "
+            "sans utiliser de crédit OpenAI."
         )
 
-    # KAJIMINYI
     if "kajiminyi" in text:
 
         return (
             "KAJIMINYI 📱 est une application de messagerie "
-            "conçue pour permettre aux utilisateurs de discuter, "
-            "créer des groupes, échanger des messages et utiliser "
-            "des fonctionnalités intelligentes."
+            "que nous sommes en train de construire.\n\n"
+            "Elle comprend notamment :\n"
+            "💬 Conversations\n"
+            "👥 Groupes\n"
+            "📞 Appels audio\n"
+            "📹 Appels vidéo\n"
+            "🤖 Assistant\n"
+            "👤 Profils."
         )
 
-    # Aide
     if (
         "aide" in text
         or "help" in text
@@ -684,40 +670,16 @@ def assistant_local(message):
     ):
 
         return (
-            "Je peux t'aider avec KAJIMINYI. 😊\n\n"
-            "Tu peux notamment utiliser :\n"
-            "• les conversations 💬\n"
-            "• les groupes 👥\n"
-            "• les appels 📞\n"
-            "• l'assistant IA 🤖\n"
-            "• ton profil 👤"
+            "Bien sûr 😊 Je peux t'aider avec KAJIMINYI.\n\n"
+            "Tu peux utiliser :\n"
+            "💬 Conversations\n"
+            "👥 Groupes\n"
+            "📞 Appels audio\n"
+            "📹 Appels vidéo\n"
+            "🤖 Assistant IA\n"
+            "👤 Profil."
         )
 
-    # Merci
-    if (
-        "merci" in text
-        or "thanks" in text
-    ):
-
-        return (
-            "Avec plaisir ! 😊 "
-            "Je suis là pour t'aider."
-        )
-
-    # Qui a créé
-    if (
-        "créateur" in text
-        or "createur" in text
-        or "développeur" in text
-        or "developpeur" in text
-    ):
-
-        return (
-            "KAJIMINYI est le projet que nous sommes en train "
-            "de construire ensemble. 🚀"
-        )
-
-    # Fonctionnalités
     if (
         "fonctionnalité" in text
         or "fonctionnalites" in text
@@ -725,68 +687,74 @@ def assistant_local(message):
     ):
 
         return (
-            "KAJIMINYI est conçu autour de plusieurs fonctionnalités :\n\n"
-            "💬 Messages\n"
+            "Voici les principales fonctionnalités prévues "
+            "pour KAJIMINYI 🚀 :\n\n"
+            "💬 Messagerie\n"
             "👥 Groupes\n"
             "📞 Appels audio\n"
             "📹 Appels vidéo\n"
             "🤖 Assistant\n"
             "👤 Profils\n"
-            "🔔 Notifications\n\n"
-            "Nous pouvons les développer progressivement."
+            "🔔 Notifications\n"
+            "📎 Partage de fichiers."
         )
 
-    # Traduction simple
-    if "traduis" in text or "traduire" in text:
+    if "merci" in text or "thanks" in text:
 
         return (
-            "Je peux préparer une traduction simple. 🌍 "
-            "Écris-moi le texte à traduire et précise la langue souhaitée."
+            "Avec plaisir ! 😊\n\n"
+            "Je suis là pour t'aider."
         )
 
-    # Rédaction
-    if (
-        "écris" in text
-        or "ecris" in text
-        or "rédige" in text
-        or "redige" in text
-    ):
-
-        return (
-            "Bien sûr ✍️. "
-            "Donne-moi le type de texte que tu souhaites préparer "
-            "et son objectif."
-        )
-
-    # Idée
     if "idée" in text or "idee" in text:
 
         return (
-            "Voici une idée 💡 : ajoute progressivement à KAJIMINYI "
-            "des fonctionnalités qui facilitent la communication, "
-            "comme les messages vocaux, les réactions, les groupes "
-            "et les appels."
+            "💡 Une bonne idée pour KAJIMINYI serait "
+            "d'ajouter progressivement les messages vocaux, "
+            "les réactions, le partage de fichiers et les "
+            "appels vidéo."
         )
 
-    # Explication
+    if (
+        "rédige" in text
+        or "redige" in text
+        or "écris" in text
+        or "ecris" in text
+    ):
+
+        return (
+            "✍️ Bien sûr.\n\n"
+            "Donne-moi le type de message que tu souhaites "
+            "préparer et son destinataire."
+        )
+
+    if (
+        "traduis" in text
+        or "traduire" in text
+    ):
+
+        return (
+            "🌍 Je peux t'aider à préparer une traduction.\n\n"
+            "Écris le texte à traduire et indique la langue "
+            "souhaitée."
+        )
+
     if (
         "explique" in text
         or "expliquer" in text
     ):
 
         return (
-            "Bien sûr 🧠. "
-            "Donne-moi le sujet que tu veux comprendre et je "
-            "te l'expliquerai simplement."
+            "🧠 Bien sûr.\n\n"
+            "Donne-moi le sujet que tu souhaites comprendre "
+            "et je vais essayer de te l'expliquer simplement."
         )
 
-    # Réponse générale
     return (
-        "Je comprends ta question. 😊\n\n"
-        "Je fonctionne actuellement en mode gratuit local, "
-        "sans API OpenAI. Je peux surtout t'aider avec "
-        "l'utilisation et le développement de KAJIMINYI.\n\n"
-        "Essaie par exemple :\n"
+        "Je comprends ta question 😊.\n\n"
+        "Je fonctionne actuellement en mode gratuit KAJIMINYI, "
+         "sans crédit OpenAI.\n\n"
+        "Tu peux par exemple me demander :\n"
         "• « Qui es-tu ? »\n"
         "• « Qu'est-ce que KAJIMINYI ? »\n"
         "• « Donne-moi de l'aide »\n"
@@ -823,27 +791,22 @@ def ai_chat():
                 "message": "Message trop long."
             }), 400
 
-        # Historique reçu par le frontend.
-        # Il est accepté pour conserver la compatibilité
-        # avec assistant.html.
         history = data.get("history", [])
 
         if not isinstance(history, list):
             history = []
 
-        # Réponse locale gratuite
         reply = assistant_local(message)
 
         return jsonify({
             "success": True,
             "reply": reply,
-            "model": "kajiminyi-local-free",
-            "history_received": len(history)
+            "model": "kajiminyi-local-free"
         })
 
     except Exception as e:
 
-        print("ERREUR ASSISTANT LOCAL:", e)
+        print("ERREUR ASSISTANT:", e)
 
         return jsonify({
             "success": False,
@@ -852,7 +815,7 @@ def ai_chat():
 
 
 # ============================================================
-# PAGE RACINE
+# RACINE
 # ============================================================
 
 @app.route("/", methods=["GET"])
@@ -867,7 +830,7 @@ def home():
 
 
 # ============================================================
-# DEMARRAGE
+# START
 # ============================================================
 
 if __name__ == "__main__":
@@ -879,4 +842,4 @@ if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=port
-    ))
+    )
