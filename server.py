@@ -352,8 +352,160 @@ def get_users():
             "success": False,
             "message": "Impossible de récupérer les utilisateurs."
         }), 500
+# ============================================================
+# PROFIL UTILISATEUR - RÉCUPÉRER
+# ============================================================
 
+@app.route("/api/profile/<int:user_id>", methods=["GET"])
+def get_profile(user_id):
 
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+
+                cur.execute("""
+                    SELECT
+                        id,
+                        full_name,
+                        phone,
+                        email,
+                        username,
+                        status,
+                        photo_url,
+                        created_at
+                    FROM users
+                    WHERE id = %s
+                """, (user_id,))
+
+                user = cur.fetchone()
+
+        if not user:
+            return jsonify({
+                "success": False,
+                "message": "Utilisateur introuvable."
+            }), 404
+
+        return jsonify({
+            "success": True,
+            "user": {
+                "id": user[0],
+                "full_name": user[1],
+                "phone": user[2],
+                "email": user[3],
+                "username": user[4],
+                "status": user[5],
+                "photo_url": user[6],
+                "created_at": user[7]
+            }
+        })
+
+    except Exception as e:
+        print("ERREUR PROFILE GET:", e)
+
+        return jsonify({
+            "success": False,
+            "message": "Impossible de récupérer le profil."
+        }), 500
+# ============================================================
+# PROFIL UTILISATEUR - MODIFIER
+# ============================================================
+
+@app.route("/api/profile/<int:user_id>", methods=["PUT"])
+def update_profile(user_id):
+
+    try:
+        data = request.get_json() or {}
+
+        full_name = str(data.get("full_name", "")).strip()
+        username = str(data.get("username", "")).strip()
+        status = str(data.get("status", "")).strip()
+        photo_url = str(data.get("photo_url", "")).strip()
+
+        if not full_name:
+            return jsonify({
+                "success": False,
+                "message": "Le nom complet est obligatoire."
+            }), 400
+
+        if len(full_name) > 150:
+            return jsonify({
+                "success": False,
+                "message": "Le nom est trop long."
+            }), 400
+
+        if len(username) > 50:
+            return jsonify({
+                "success": False,
+                "message": "Le nom d'utilisateur est trop long."
+            }), 400
+
+        if len(status) > 255:
+            return jsonify({
+                "success": False,
+                "message": "Le statut est trop long."
+            }), 400
+
+        with get_db() as conn:
+            with conn.cursor() as cur:
+
+                cur.execute("""
+                    UPDATE users
+                    SET
+                        full_name = %s,
+                        username = %s,
+                        status = %s,
+                        photo_url = %s
+                    WHERE id = %s
+                    RETURNING
+                        id,
+                        full_name,
+                        phone,
+                        email,
+                        username,
+                        status,
+                        photo_url,
+                        created_at
+                """, (
+                    full_name,
+                    username if username else None,
+                    status if status else None,
+                    photo_url if photo_url else None,
+                    user_id
+                ))
+
+                user = cur.fetchone()
+
+                if not user:
+                    return jsonify({
+                        "success": False,
+                        "message": "Utilisateur introuvable."
+                    }), 404
+
+            conn.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Profil mis à jour avec succès.",
+            "user": {
+                "id": user[0],
+                "full_name": user[1],
+                "phone": user[2],
+                "email": user[3],
+                "username": user[4],
+                "status": user[5],
+                "photo_url": user[6],
+                "created_at": user[7]
+            }
+        })
+
+    except Exception as e:
+
+        print("ERREUR PROFILE UPDATE:", e)
+
+        return jsonify({
+            "success": False,
+            "message": "Impossible de modifier le profil."
+        }), 500
 # ============================================================
 # CRÉER UN GROUPE
 # ============================================================
