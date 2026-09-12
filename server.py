@@ -3,7 +3,7 @@ import psycopg
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash
-
+CORS(app)
 app = Flask(__name__)
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
