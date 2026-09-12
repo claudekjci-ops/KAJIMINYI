@@ -1,9 +1,16 @@
 import os
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+
 import psycopg
 from psycopg.rows import dict_row
-from werkzeug.security import generate_password_hash, check_password_hash
+
+from werkzeug.security import (
+    generate_password_hash,
+    check_password_hash
+)
+
 from openai import OpenAI
 
 
@@ -34,7 +41,10 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 AI_MODEL = "gpt-5.6-luna"
 
 
-# Client OpenAI
+# ============================================================
+# CLIENT OPENAI
+# ============================================================
+
 client = None
 
 if OPENAI_API_KEY:
@@ -70,7 +80,10 @@ def init_tables():
 
         with conn.cursor() as cur:
 
+            # ------------------------------------------------
             # USERS
+            # ------------------------------------------------
+
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id SERIAL PRIMARY KEY,
@@ -82,8 +95,10 @@ def init_tables():
                 )
             """)
 
-
+            # ------------------------------------------------
             # GROUPS
+            # ------------------------------------------------
+
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS groups (
                     id SERIAL PRIMARY KEY,
@@ -97,8 +112,10 @@ def init_tables():
                 )
             """)
 
-
+            # ------------------------------------------------
             # GROUP MEMBERS
+            # ------------------------------------------------
+
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS group_members (
                     id SERIAL PRIMARY KEY,
@@ -113,7 +130,6 @@ def init_tables():
                     UNIQUE(group_id, user_id)
                 )
             """)
-
 
         conn.commit()
 
@@ -164,15 +180,11 @@ def db_test():
 
                 row = cur.fetchone()
 
-
         return jsonify({
             "success": True,
-            "message":
-                "Connexion à PostgreSQL réussie !",
-            "result":
-                row["result"]
+            "message": "Connexion à PostgreSQL réussie !",
+            "result": row["result"]
         })
-
 
     except Exception as e:
 
@@ -195,10 +207,8 @@ def init_db():
 
         return jsonify({
             "success": True,
-            "message":
-                "Tables KAJIMINYI créées avec succès."
+            "message": "Tables KAJIMINYI créées avec succès."
         })
-
 
     except Exception as e:
 
@@ -238,34 +248,30 @@ def register():
             data.get("password") or ""
         )
 
-
         if not full_name:
+
             return jsonify({
                 "success": False,
-                "message":
-                    "Le nom complet est obligatoire."
+                "message": "Le nom complet est obligatoire."
             }), 400
-
 
         if not phone:
+
             return jsonify({
                 "success": False,
-                "message":
-                    "Le numéro de téléphone est obligatoire."
+                "message": "Le numéro de téléphone est obligatoire."
             }), 400
-
 
         if not password:
+
             return jsonify({
                 "success": False,
-                "message":
-                    "Le mot de passe est obligatoire."
+                "message": "Le mot de passe est obligatoire."
             }), 400
 
-
-        password_hash =
-            generate_password_hash(password)
-
+        password_hash = generate_password_hash(
+            password
+        )
 
         with get_db() as conn:
 
@@ -293,30 +299,22 @@ def register():
                     password_hash
                 ))
 
-
-                user =
-                    cur.fetchone()
-
+                user = cur.fetchone()
 
             conn.commit()
 
-
         return jsonify({
             "success": True,
-            "message":
-                "Compte créé avec succès.",
+            "message": "Compte créé avec succès.",
             "user": user
         }), 201
-
 
     except psycopg.errors.UniqueViolation:
 
         return jsonify({
             "success": False,
-            "message":
-                "Ce numéro ou cet email existe déjà."
+            "message": "Ce numéro ou cet email existe déjà."
         }), 409
-
 
     except Exception as e:
 
@@ -348,15 +346,12 @@ def login():
             data.get("password") or ""
         )
 
-
         if not phone or not password:
 
             return jsonify({
                 "success": False,
-                "message":
-                    "Téléphone et mot de passe obligatoires."
+                "message": "Téléphone et mot de passe obligatoires."
             }), 400
-
 
         with get_db() as conn:
 
@@ -374,19 +369,14 @@ def login():
                     WHERE phone = %s
                 """, (phone,))
 
-
-                user =
-                    cur.fetchone()
-
+                user = cur.fetchone()
 
         if not user:
 
             return jsonify({
                 "success": False,
-                "message":
-                    "Numéro ou mot de passe incorrect."
+                "message": "Numéro ou mot de passe incorrect."
             }), 401
-
 
         if not check_password_hash(
             user["password_hash"],
@@ -395,24 +385,19 @@ def login():
 
             return jsonify({
                 "success": False,
-                "message":
-                    "Numéro ou mot de passe incorrect."
+                "message": "Numéro ou mot de passe incorrect."
             }), 401
-
 
         user.pop(
             "password_hash",
             None
         )
 
-
         return jsonify({
             "success": True,
-            "message":
-                "Connexion réussie.",
+            "message": "Connexion réussie.",
             "user": user
         })
-
 
     except Exception as e:
 
@@ -446,15 +431,12 @@ def users():
                     ORDER BY created_at DESC
                 """)
 
-                users_list =
-                    cur.fetchall()
-
+                users_list = cur.fetchall()
 
         return jsonify({
             "success": True,
             "users": users_list
         })
-
 
     except Exception as e:
 
@@ -494,37 +476,46 @@ def create_group():
             "creator_id"
         )
 
-        member_ids =
-            data.get("member_ids") or []
-
+        member_ids = data.get(
+            "member_ids"
+        ) or []
 
         if not name:
 
             return jsonify({
                 "success": False,
-                "message":
-                    "Le nom du groupe est obligatoire."
+                "message": "Le nom du groupe est obligatoire."
             }), 400
-
 
         if not creator_id:
 
             return jsonify({
                 "success": False,
-                "message":
-                    "Le créateur du groupe est obligatoire."
+                "message": "Le créateur du groupe est obligatoire."
             }), 400
 
+        try:
 
+            creator_id = int(creator_id)
+
+        except:
+
+            return jsonify({
+                "success": False,
+                "message": "creator_id invalide."
+            }), 400
+
+        # ----------------------------------------------------
         # Nettoyage des IDs
+        # ----------------------------------------------------
+
         clean_members = []
 
         for member_id in member_ids:
 
             try:
 
-                member_id =
-                    int(member_id)
+                member_id = int(member_id)
 
                 if member_id not in clean_members:
 
@@ -536,40 +527,37 @@ def create_group():
 
                 pass
 
-
         # Le créateur doit toujours être membre
+
         if creator_id not in clean_members:
 
             clean_members.append(
-                int(creator_id)
+                creator_id
             )
-
 
         with get_db() as conn:
 
             with conn.cursor() as cur:
 
                 # Vérifier créateur
+
                 cur.execute("""
                     SELECT id
                     FROM users
                     WHERE id = %s
                 """, (creator_id,))
 
-                creator =
-                    cur.fetchone()
-
+                creator = cur.fetchone()
 
                 if not creator:
 
                     return jsonify({
                         "success": False,
-                        "message":
-                            "Utilisateur créateur introuvable."
+                        "message": "Utilisateur créateur introuvable."
                     }), 404
 
-
                 # Créer groupe
+
                 cur.execute("""
                     INSERT INTO groups
                     (
@@ -593,20 +581,17 @@ def create_group():
                     creator_id
                 ))
 
-
-                group =
-                    cur.fetchone()
-
+                group = cur.fetchone()
 
                 # Ajouter membres
+
                 for member_id in clean_members:
 
                     role = (
                         "admin"
-                        if member_id == int(creator_id)
+                        if member_id == creator_id
                         else "member"
                     )
-
 
                     cur.execute("""
                         INSERT INTO group_members
@@ -628,17 +613,13 @@ def create_group():
                         role
                     ))
 
-
             conn.commit()
-
 
         return jsonify({
             "success": True,
-            "message":
-                "Groupe créé avec succès.",
+            "message": "Groupe créé avec succès.",
             "group": group
         }), 201
-
 
     except Exception as e:
 
@@ -657,21 +638,17 @@ def get_groups():
 
     try:
 
-        user_id =
-            request.args.get(
-                "user_id",
-                type=int
-            )
-
+        user_id = request.args.get(
+            "user_id",
+            type=int
+        )
 
         if not user_id:
 
             return jsonify({
                 "success": False,
-                "message":
-                    "user_id est obligatoire."
+                "message": "user_id est obligatoire."
             }), 400
-
 
         with get_db() as conn:
 
@@ -692,16 +669,12 @@ def get_groups():
                     ORDER BY g.created_at DESC
                 """, (user_id,))
 
-
-                groups =
-                    cur.fetchall()
-
+                groups = cur.fetchall()
 
         return jsonify({
             "success": True,
             "groups": groups
         })
-
 
     except Exception as e:
 
@@ -741,16 +714,12 @@ def get_group_members(group_id):
                     ORDER BY gm.joined_at ASC
                 """, (group_id,))
 
-
-                members =
-                    cur.fetchall()
-
+                members = cur.fetchall()
 
         return jsonify({
             "success": True,
             "members": members
         })
-
 
     except Exception as e:
 
@@ -774,24 +743,32 @@ def add_group_member(group_id):
 
         data = request.get_json() or {}
 
-        user_id =
-            data.get("user_id")
+        user_id = data.get(
+            "user_id"
+        )
 
-        role =
-            data.get(
-                "role",
-                "member"
-            )
-
+        role = data.get(
+            "role",
+            "member"
+        )
 
         if not user_id:
 
             return jsonify({
                 "success": False,
-                "message":
-                    "user_id est obligatoire."
+                "message": "user_id est obligatoire."
             }), 400
 
+        try:
+
+            user_id = int(user_id)
+
+        except:
+
+            return jsonify({
+                "success": False,
+                "message": "user_id invalide."
+            }), 400
 
         with get_db() as conn:
 
@@ -823,21 +800,15 @@ def add_group_member(group_id):
                     role
                 ))
 
-
-                member =
-                    cur.fetchone()
-
+                member = cur.fetchone()
 
             conn.commit()
 
-
         return jsonify({
             "success": True,
-            "message":
-                "Membre ajouté.",
+            "message": "Membre ajouté.",
             "member": member
         })
-
 
     except Exception as e:
 
@@ -869,29 +840,21 @@ def delete_group(group_id):
                     RETURNING id
                 """, (group_id,))
 
-
-                deleted =
-                    cur.fetchone()
-
+                deleted = cur.fetchone()
 
             conn.commit()
-
 
         if not deleted:
 
             return jsonify({
                 "success": False,
-                "message":
-                    "Groupe introuvable."
+                "message": "Groupe introuvable."
             }), 404
-
 
         return jsonify({
             "success": True,
-            "message":
-                "Groupe supprimé."
+    "message": "Groupe supprimé."
         })
-
 
     except Exception as e:
 
@@ -902,7 +865,7 @@ def delete_group(group_id):
 
 
 # ============================================================
-# ===================== ASSISTANT IA =========================
+# ASSISTANT IA
 # ============================================================
 
 AI_INSTRUCTION = """
@@ -910,7 +873,7 @@ Tu es l'Assistant IA officiel intégré à l'application KAJIMINYI.
 
 Ton nom est Assistant KAJIMINYI.
 
-Tu dois répondre principalement en français, sauf si
+Tu réponds principalement en français, sauf si
 l'utilisateur demande une autre langue.
 
 Tu es chaleureux, professionnel, clair et utile.
@@ -948,6 +911,10 @@ groupes, appels, IA et autres fonctionnalités.
 """
 
 
+# ============================================================
+# CHAT IA
+# ============================================================
+
 @app.route(
     "/api/ai/chat",
     methods=["POST"]
@@ -957,94 +924,84 @@ def ai_chat():
     try:
 
         # ----------------------------------------------------
-        # Vérifier clé API
+        # Vérifier la clé OpenAI
         # ----------------------------------------------------
 
         if not OPENAI_API_KEY or client is None:
 
             return jsonify({
                 "success": False,
-                "message":
-                    "OPENAI_API_KEY n'est pas configurée sur le serveur."
+                "message": (
+                    "OPENAI_API_KEY n'est pas configurée "
+                    "sur le serveur."
+                )
             }), 500
 
-
         # ----------------------------------------------------
-        # Récupérer requête
+        # Récupérer les données
         # ----------------------------------------------------
 
-        data =
-            request.get_json() or {}
+        data = request.get_json() or {}
 
+        message = (
+            data.get("message") or ""
+        ).strip()
 
-        message =
-            (data.get("message") or "").strip()
-
-
-        history =
+        history = (
             data.get("history") or []
-
+        )
 
         if not message:
 
             return jsonify({
                 "success": False,
-                "message":
-                    "Le message est vide."
+                "message": "Le message est vide."
             }), 400
 
+        # ----------------------------------------------------
+        # Limite du message
+        # ----------------------------------------------------
 
-        # Limite de sécurité
         if len(message) > 12000:
 
             return jsonify({
                 "success": False,
-                "message":
-                    "Message trop long."
+                "message": "Message trop long."
             }), 400
 
-
         # ----------------------------------------------------
-        # Construire historique
+        # Construire l'historique
         # ----------------------------------------------------
 
         input_messages = []
 
-
-        # On limite l'historique envoyé
-        # pour garder les requêtes raisonnables.
         history = history[-12:]
-
 
         for item in history:
 
-            role =
-                item.get("role")
+            if not isinstance(item, dict):
+                continue
 
-            content =
-                item.get("content")
+            role = item.get("role")
 
+            content = item.get("content")
 
             if role not in [
                 "user",
                 "assistant"
             ]:
-
                 continue
-
 
             if not content:
                 continue
-
 
             input_messages.append({
                 "role": role,
                 "content": str(content)[:12000]
             })
 
-
         # ----------------------------------------------------
-        # Ajouter nouveau message
+        # Nouveau message
         # ----------------------------------------------------
 
         input_messages.append({
@@ -1052,35 +1009,27 @@ def ai_chat():
             "content": message
         })
 
-
         # ----------------------------------------------------
         # APPEL OPENAI
         # ----------------------------------------------------
 
         response = client.responses.create(
-
             model=AI_MODEL,
-
-            instructions=AI_INSTRUCTIONS,
-
+            instructions=AI_INSTRUCTION,
             input=input_messages,
-
             max_output_tokens=1200
         )
 
-
-        reply =
-            response.output_text
-
+        reply = response.output_text
 
         if not reply:
 
-            reply =
+            reply = (
                 "Je n'ai pas pu générer une réponse."
-
+            )
 
         # ----------------------------------------------------
-        # REPONSE AU TELEPHONE
+        # REPONSE
         # ----------------------------------------------------
 
         return jsonify({
@@ -1089,7 +1038,6 @@ def ai_chat():
             "model": AI_MODEL
         })
 
-
     except Exception as e:
 
         print(
@@ -1097,16 +1045,17 @@ def ai_chat():
             str(e)
         )
 
-
         return jsonify({
             "success": False,
-            "message":
-                "Une erreur est survenue avec l'Assistant IA."
+            "message": (
+                "Une erreur est survenue avec "
+                "l'Assistant IA."
+            )
         }), 500
 
 
 # ============================================================
-# DEMARRAGE
+# INITIALISATION
 # ============================================================
 
 try:
@@ -1121,6 +1070,10 @@ except Exception as e:
     )
 
 
+# ============================================================
+# DEMARRAGE LOCAL
+# ============================================================
+
 if __name__ == "__main__":
 
     app.run(
@@ -1131,4 +1084,4 @@ if __name__ == "__main__":
                 5000
             )
         )
-    )
+)
