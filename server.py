@@ -1,6 +1,7 @@
 import os
 import psycopg
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
+from werkzeug.security import generate_password_hash
 
 app = Flask(__name__)
 
@@ -89,6 +90,49 @@ def init_db():
             "error": str(e)
         }), 500
 
+@app.route("/api/register", methods=["POST"])
+def register():
+    try:
+        data = request.get_json()
 
+        full_name = data.get("full_name")
+        phone = data.get("phone")
+        email = data.get("email")
+        password = data.get("password")
+
+        if not full_name or not phone or not password:
+            return jsonify({
+                "success": False,
+                "message": "Nom, téléphone et mot de passe sont obligatoires"
+            }), 400
+
+        password_hash = generate_password_hash(password)
+
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cursor:
+
+                cursor.execute("""
+                    INSERT INTO users
+                    (full_name, phone, email, password_hash)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id
+                """, (full_name, phone, email, password_hash))
+
+                user_id = cursor.fetchone()[0]
+
+            conn.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Compte KAJIMINYI créé avec succès !",
+            "user_id": user_id
+        }), 201
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": "Impossible de créer le compte",
+            "error": str(e)
+        }), 500
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
