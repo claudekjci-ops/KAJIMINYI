@@ -88,21 +88,24 @@ def init_db():
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
-# COLONNES PROFIL
-cur.execute("""
-    ALTER TABLE users
-    ADD COLUMN IF NOT EXISTS username VARCHAR(50)
-""")
+                )
 
-cur.execute("""
-    ALTER TABLE users
-    ADD COLUMN IF NOT EXISTS status VARCHAR(255)
-""")
+                # COLONNES PROFIL
+                cur.execute("""
+                    ALTER TABLE users
+                    ADD COLUMN IF NOT EXISTS username VARCHAR(50)
+                """)
 
-cur.execute("""
-    ALTER TABLE users
-    ADD COLUMN IF NOT EXISTS photo_url TEXT
-""")
+                cur.execute("""
+                    ALTER TABLE users
+                    ADD COLUMN IF NOT EXISTS status VARCHAR(255)
+                """)
+
+                cur.execute("""
+                    ALTER TABLE users
+                    ADD COLUMN IF NOT EXISTS photo_url TEXT
+                """)
+
                 # TABLE GROUPS
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS groups (
